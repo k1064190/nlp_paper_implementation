@@ -1,0 +1,56 @@
+import torch
+from torch import nn
+
+from embedding.PositionEncoding import PositionalEncoding
+
+from embedding.TokenEmbedding import TokenEmbedding
+from model.Encoder import Encoder
+from einops import rearrange, repeat
+
+
+class DecoderOnlyTransformer(nn.Module):
+    def __init__(self,
+                 max_seq_len=1024,
+                 embed_dim=768,
+                 num_heads=8,
+                 num_layer=6,
+                 vocab_size=32000,
+                 use_legacy=False,
+                 ):
+        super().__init__()
+        self.decoder = Encoder(max_seq_len=max_seq_len, embed_dim=embed_dim, num_heads=num_heads, num_layer=num_layer,
+                               use_legacy=use_legacy)
+
+        self.te = TokenEmbedding(embed_dim, vocab_size)
+        self.pe = PositionalEncoding(embed_dim, max_seq_len)
+
+        self.generator = nn.Linear(embed_dim, vocab_size)
+
+    def decode(self, tgt, kv, attn_mask=None, is_causal=True):
+        tgt_kv_mask = self.make_pad_mask(tgt, kv)
+        tgt = self.te(tgt)
+        tgt = self.pe(tgt)
+        return self.decoder(tgt, kv, kv, attn_mask=attn_mask, is_causal=is_causal)
+
+    def forward(self, tgt):
+        decoder_out = self.decoder(tgt)
+        out = self.generator(tgt)
+        out = nn.functional.log_softmax(out, dim=-1)
+        return out, decoder_out
+
+    def make_pad_mask(self, q, kv, pad_idx=0):
+        # q: [batch, q_len]
+        # kv: [batch, kv_len]
+        q_len = q.size(1)
+        kv_len = kv.size(1)
+        q_mask = q.ne(pad_idx)
+        q_mask = rearrange(q_mask, 'b i -> b 1 i 1')
+        q_mask = repeat(q_mask, 'b 1 i k -> b 1 i k', k=kv_len)
+
+        kv_mask = kv.ne(pad_idx)
+        kv_mask = rearrange(kv_mask, 'b i -> b 1 1 i')
+        kv_mask = repeat(kv_mask, 'b 1 1 i -> b 1 j i', j=q_len)
+
+        mask = q_mask & kv_mask
+        mask.requires_grad = False
+        return mask

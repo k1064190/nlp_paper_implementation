@@ -6,9 +6,9 @@ from layer.PositionWiseFeedForward import PositionWiseFeedForward
 from layer.ResidualConnection import ResidualConnection
 
 
-class EncoderBlock(nn.Module):
+class DecoderOnlyBlock(nn.Module):
     def __init__(self,
-                 max_seq_len=512,
+                 max_seq_len=1024,
                  embed_dim=768,
                  num_heads=8,
                  use_legacy=False,
@@ -25,7 +25,7 @@ class EncoderBlock(nn.Module):
         self.ffn = PositionWiseFeedForward(embed_dim=embed_dim)
         self.residual = ResidualConnection(embed_dim=embed_dim, pre_norm=True)
 
-    def forward(self, q, src_mask=None, is_causal=False):
+    def forward(self, q, src_mask=None, is_causal=True):
         q = self.residual(q, lambda x: self.attn(x, x, x, attn_mask=src_mask, is_causal=is_causal))
         q = self.residual(q, lambda x: self.ffn(x))
         return q
