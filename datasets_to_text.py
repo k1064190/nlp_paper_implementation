@@ -1,7 +1,7 @@
 from datasets import load_dataset
 
 # Load the dataset "heegyu/namuwiki-extracted"
-dataset = load_dataset("heegyu/namuwiki-extracted")
+dataset = load_dataset("heegyu/namuwiki-extracted", split='train')
 
 # print(dataset['train'][0])
 # e.g) {
@@ -11,9 +11,11 @@ dataset = load_dataset("heegyu/namuwiki-extracted")
 # 'namespace': ''
 # }
 
-# write the dataset to a text file
-for split in dataset.keys():
-    with open(f"datasets/{split}.txt", "w", encoding='utf-8') as f:
-        for example in dataset[split]:
-            f.write(example["title"] + "\n")
-            f.write(example["text"] + "\n")
+# # write the dataset to a text file
+# for split in dataset.keys():
+#     with open(f"datasets/{split}.txt", "w", encoding='utf-8') as f:
+#         for example in dataset[split]:
+#             f.write(example["title"] + "\n")
+#             f.write(example["text"] + "\n")
+
+print(dataset['title'][:5])

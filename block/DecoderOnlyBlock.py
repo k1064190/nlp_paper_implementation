@@ -25,7 +25,7 @@ class DecoderOnlyBlock(nn.Module):
         self.ffn = PositionWiseFeedForward(embed_dim=embed_dim)
         self.residual = ResidualConnection(embed_dim=embed_dim, pre_norm=True)
 
-    def forward(self, q, src_mask=None, is_causal=True):
-        q = self.residual(q, lambda x: self.attn(x, x, x, attn_mask=src_mask, is_causal=is_causal))
+    def forward(self, q, tgt_mask=None, is_causal=True):
+        q = self.residual(q, lambda x: self.attn(x, x, x, attn_mask=tgt_mask, is_causal=is_causal))
         q = self.residual(q, lambda x: self.ffn(x))
         return q

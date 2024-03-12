@@ -4,7 +4,7 @@ from torch import nn
 from embedding.PositionEncoding import PositionalEncoding
 
 from embedding.TokenEmbedding import TokenEmbedding
-from model.Encoder import Encoder
+from model.DecoderOnly import DecoderOnly
 from einops import rearrange, repeat
 
 
@@ -18,7 +18,7 @@ class DecoderOnlyTransformer(nn.Module):
                  use_legacy=False,
                  ):
         super().__init__()
-        self.decoder = Encoder(max_seq_len=max_seq_len, embed_dim=embed_dim, num_heads=num_heads, num_layer=num_layer,
+        self.decoder = DecoderOnly(max_seq_len=max_seq_len, embed_dim=embed_dim, num_heads=num_heads, num_layer=num_layer,
                                use_legacy=use_legacy)
 
         self.te = TokenEmbedding(embed_dim, vocab_size)
@@ -26,14 +26,14 @@ class DecoderOnlyTransformer(nn.Module):
 
         self.generator = nn.Linear(embed_dim, vocab_size)
 
-    def decode(self, tgt, kv, attn_mask=None, is_causal=True):
-        tgt_kv_mask = self.make_pad_mask(tgt, kv)
+    def decode(self, tgt, tgt_mask=None):
         tgt = self.te(tgt)
         tgt = self.pe(tgt)
-        return self.decoder(tgt, kv, kv, attn_mask=attn_mask, is_causal=is_causal)
+        return self.decoder(tgt, tgt_mask=tgt_mask, is_causal=True)
 
     def forward(self, tgt):
-        decoder_out = self.decoder(tgt)
+        tgt_mask = self.make_pad_mask(tgt, tgt)
+        decoder_out = self.decode(tgt, tgt_mask=tgt_mask)
         out = self.generator(tgt)
         out = nn.functional.log_softmax(out, dim=-1)
         return out, decoder_out

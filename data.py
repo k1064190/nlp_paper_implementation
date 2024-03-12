@@ -3,13 +3,14 @@ import os
 import sys
 import sentencepiece as spm
 from transformers import AutoTokenizer
+import torch
 
 class NamuwikiDataset:
-    def __init__(self, vocab_path, txt_path=None):
-        self.dataset = load_dataset("heegyu/namuwiki-extracted")
-
+    def __init__(self, vocab_path, txt_path=None, max_seq_len=512, batch_size=8):
+        self.dataset = load_dataset("heegyu/namuwiki-extracted", split='train')['text']
+        self.max_seq_len = max_seq_len
         if os.path.exists(vocab_path):
-            self.sp = AutoTokenizer.from_pretrained(vocab_path)
+            self.tokenizer = AutoTokenizer.from_pretrained(vocab_path)
         else:
             if txt_path is None:
                 txt_path = 'temp_txt.txt'
@@ -28,14 +29,27 @@ class NamuwikiDataset:
                 " --eos_id=3 --eos_piece=</s>" +  # end of sequence (3)
                 " --user_defined_symbols=<sep>,<cls>,<mask>")  # 사용자 정의 토큰
 
-            self.sp = AutoTokenizer.from_pretrained(vocab_path)
+            self.tokenizer = AutoTokenizer.from_pretrained(vocab_path + '.model')
+            self.dataset = self.dataset.map(lambda e: self.tokenizer.encode('<s>' + e + '</s>', max_length=self.max_seq_len, padding='max_length', truncation=True), batched=True)
+            self.dataset.set_format(type='torch')
+
+            self.dataloader = torch.utils.data.DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
 
     def write_to_text(self, output_path="datasets"):
-        for split in self.dataset.keys():
-            with open(f"{output_path}/{split}.txt", "w", encoding='utf-8') as f:
-                for example in self.dataset[split]:
-                    f.write(example["title"] + "\n")
-                    f.write(example["text"] + "\n")
+        with open(f"{output_path}/train.txt", "w", encoding='utf-8') as f:
+            for example in self.dataset:
+                f.write(example + "\n")
 
     def test_tokenizer(self):
-        print(self.sp.encode(self.dataset['train'][0]['text']))
+        print(self.tokenizer.encode(self.dataset['train'][0]['text']))
+
+    def __len__(self):
+        return len(self.dataset['train'])
+
+    def encode_batch(self, text_list):
+        return self.tokenizer.batch_encode_plus(text_list, max_length=self.max_seq_len, pad_to_max_length=True, return_tensors='pt')
+
+
+if __name__ == '__main__':
+    print("dataset test")
+    dataset = NamuwikiDataset('tokenizer.model')

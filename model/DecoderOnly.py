@@ -15,7 +15,7 @@ class DecoderOnly(nn.Module):
         self.layers = nn.ModuleList([DecoderOnlyBlock(max_seq_len=max_seq_len, embed_dim=embed_dim, num_heads=num_heads,
                                                   use_legacy=use_legacy) for _ in range(num_layer)])
 
-    def forward(self, q, src_mask=None, is_causal=True):
+    def forward(self, q, tgt_mask=None, is_causal=True):
         for layer in self.layers:
-            q = layer(q, src_mask=src_mask, is_causal=is_causal)
+            q = layer(q, tgt_mask=tgt_mask, is_causal=is_causal)
         return q
