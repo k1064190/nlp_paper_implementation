@@ -11,7 +11,7 @@ def main(args):
     spm.SentencePieceTrainer.train(
         f"--input={input} --model_prefix={model_prefix} --vocab_size={vocab_size + 7}" +
         f" --model_type={model_type} --character_coverage={character_coverage}" +
-        " --max_sentence_length=999999" +  # 문장 최대 길이 (너무 길면 에러발생)
+        " --max_sentence_length=2048" +  # 문장 최대 길이 (너무 길면 에러발생)
         " --pad_id=0 --pad_piece=<pad>" +  # pad (0)
         " --unk_id=1 --unk_piece=<unk>" +  # unknown (1)
         " --bos_id=2 --bos_piece=<s>" +  # begin of sequence (2)
