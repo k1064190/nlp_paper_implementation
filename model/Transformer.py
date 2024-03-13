@@ -56,7 +56,7 @@ class Transformer(nn.Module):
         kv_len = kv.size(1)
         q_mask = q.ne(pad_idx)
         q_mask = rearrange(q_mask, 'b i -> b 1 i 1')
-        q_mask = repeat(q_mask, 'b 1 i k -> b 1 i k', k=kv_len)
+        q_mask = repeat(q_mask, 'b 1 i 1 -> b 1 i k', k=kv_len)
 
         kv_mask = kv.ne(pad_idx)
         kv_mask = rearrange(kv_mask, 'b i -> b 1 1 i')

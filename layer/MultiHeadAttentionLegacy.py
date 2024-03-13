@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from einops import rearrange, repeat
 
 
 class MultiHeadAttentionLegacy(nn.Module):
@@ -50,7 +51,7 @@ class MultiHeadAttentionLegacy(nn.Module):
         v = v.contiguous().view(bsz * self.num_heads, src_len, self.head_dim)
 
         # compute the attention scores
-        attn_output_weights = torch.bmm(q, k.transpose(1, 2)) / (self.head_dim ** 0.5)
+        attn_output_weights = torch.bmm(q, k.transpose(1, 2)) / (self.head_dim ** 0.5)  # (bsz * self.num_heads, tgt_len, src_len)
         attn_softmax = nn.functional.softmax(attn_output_weights, dim=-1)
 
         # Apply causal mask
@@ -58,6 +59,11 @@ class MultiHeadAttentionLegacy(nn.Module):
             attn_softmax = attn_softmax.tril()
         # Apply the attention mask
         if attn_mask is not None:
+            # attn_mask is a tensor of shape (bsz, 1, tgt_len, src_len)
+            # attn_softmax is a tensor of shape (bsz * self.num_heads, tgt_len, src_len)
+
+            # We need to repeat the attn_mask to have the same shape as attn_softmax
+            attn_mask = repeat(attn_mask, 'b 1 i j -> (b h) i j', h=self.num_heads)
             attn_softmax = attn_mask * attn_softmax
 
         # Apply the dropout

@@ -1,7 +1,12 @@
+import torch
 from torch import nn
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 from layer.MultiHeadAttentionLegacy import MultiHeadAttentionLegacy
-from layer.MultiHeadBigBirdAttention import MultiHeadBigBirdAttention
+# import MultiHeadBigBirdAttention if gpu is available
+if device == 'cuda':
+    from layer.MultiHeadBigBirdAttention import MultiHeadBigBirdAttention
 from layer.PositionWiseFeedForward import PositionWiseFeedForward
 from layer.ResidualConnection import ResidualConnection
 

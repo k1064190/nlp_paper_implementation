@@ -34,7 +34,7 @@ class DecoderOnlyTransformer(nn.Module):
     def forward(self, tgt):
         tgt_mask = self.make_pad_mask(tgt, tgt)
         decoder_out = self.decode(tgt, tgt_mask=tgt_mask)
-        out = self.generator(tgt)
+        out = self.generator(decoder_out)
         out = nn.functional.log_softmax(out, dim=-1)
         return out, decoder_out
 
@@ -44,12 +44,12 @@ class DecoderOnlyTransformer(nn.Module):
         q_len = q.size(1)
         kv_len = kv.size(1)
         q_mask = q.ne(pad_idx)
-        q_mask = rearrange(q_mask, 'b i -> b 1 i 1')
-        q_mask = repeat(q_mask, 'b 1 i k -> b 1 i k', k=kv_len)
+        # q_mask = rearrange(q_mask, 'b i -> b 1 i 1')
+        q_mask = repeat(q_mask, 'b i -> b 1 i k', k=kv_len)
 
         kv_mask = kv.ne(pad_idx)
-        kv_mask = rearrange(kv_mask, 'b i -> b 1 1 i')
-        kv_mask = repeat(kv_mask, 'b 1 1 i -> b 1 j i', j=q_len)
+        # kv_mask = rearrange(kv_mask, 'b i -> b 1 i 1')
+        kv_mask = repeat(kv_mask, 'b i -> b 1 j i', j=q_len)
 
         mask = q_mask & kv_mask
         mask.requires_grad = False
