@@ -2,54 +2,83 @@ from datasets import load_dataset
 import os
 import sys
 import sentencepiece as spm
-from transformers import AutoTokenizer
+from transformers import T5Tokenizer
 import torch
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 class NamuwikiDataset:
-    def __init__(self, vocab_path, txt_path=None, max_seq_len=512, batch_size=8):
-        self.dataset = load_dataset("heegyu/namuwiki-extracted", split='train')['text']
+    def __init__(self, vocab_path, max_seq_len=1024, batch_size=8):
+        self.dataset = load_dataset("heegyu/namuwiki-extracted", split='train').select_columns('text')
         self.max_seq_len = max_seq_len
         if os.path.exists(vocab_path):
-            self.tokenizer = AutoTokenizer.from_pretrained(vocab_path)
+            self.tokenizer = T5Tokenizer(vocab_path)
         else:
-            if txt_path is None:
-                txt_path = 'temp_txt.txt'
-            if not os.path.exists(txt_path):
-                self.write_to_text(txt_path)
+            sys.stderr.write(f"Tokenizer model not found at {vocab_path}\n")
+            sys.stderr.write("Please check the path and try again\n")
+            sys.exit(1)
 
-            txt_file = open(txt_path, 'r', encoding='utf-8')
-            vocab_path = vocab_path.split('.')[0]
-            spm.SentencePieceTrainer.train(
-                f"--input={input} --model_prefix={vocab_path} --vocab_size=32000" +
-                f" --model_type=bpe --character_coverage=1.0" +
-                " --max_sentence_length=999999" +  # 문장 최대 길이 (너무 길면 에러발생)
-                " --pad_id=0 --pad_piece=<pad>" +  # pad (0)
-                " --unk_id=1 --unk_piece=<unk>" +  # unknown (1)
-                " --bos_id=2 --bos_piece=<s>" +  # begin of sequence (2)
-                " --eos_id=3 --eos_piece=</s>" +  # end of sequence (3)
-                " --user_defined_symbols=<sep>,<cls>,<mask>")  # 사용자 정의 토큰
+        self.pad_id = self.tokenizer.pad_token_id
+        self.unk_id = self.tokenizer.unk_token_id
+        self.bos_id = self.tokenizer.bos_token_id
+        self.eos_id = self.tokenizer.eos_token_id
 
-            self.tokenizer = AutoTokenizer.from_pretrained(vocab_path + '.model')
-            self.dataset = self.dataset.map(lambda e: self.tokenizer.encode('<s>' + e + '</s>', max_length=self.max_seq_len, padding='max_length', truncation=True), batched=True)
-            self.dataset.set_format(type='torch')
+        self.pad = self.tokenizer.pad_token
+        self.unk = self.tokenizer.unk_token
+        self.bos = self.tokenizer.bos_token
+        self.eos = self.tokenizer.eos_token
 
-            self.dataloader = torch.utils.data.DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
+        # self.dataset.set_format(type='torch')
+        # self.dataloader = torch.utils.data.DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
 
-    def write_to_text(self, output_path="datasets"):
-        with open(f"{output_path}/train.txt", "w", encoding='utf-8') as f:
-            for example in self.dataset:
-                f.write(example + "\n")
-
-    def test_tokenizer(self):
-        print(self.tokenizer.encode(self.dataset['train'][0]['text']))
 
     def __len__(self):
-        return len(self.dataset['train'])
+        return len(self.dataset)
 
-    def encode_batch(self, text_list):
-        return self.tokenizer.batch_encode_plus(text_list, max_length=self.max_seq_len, pad_to_max_length=True, return_tensors='pt')
+    def collate_fn(self, batch):
+        # batch: list of tensors
+        bsz = len(batch)
+        batch = [self.tokenizer.encode(prompt, add_special_tokens=False) for prompt in batch]
+        max_prompt_len = max(len(prompt) for prompt in batch)
+        max_len = min(max_prompt_len, self.max_seq_len - 1)
+        src = torch.full((bsz, max_len + 1), self.pad_id, dtype=torch.long, device=device)
+        tgt = torch.full((bsz, max_len + 1), self.pad_id, dtype=torch.long, device=device)
+        for i, prompt in enumerate(batch):
+            prompt_len = min(len(prompt), max_len)
+            src[i, 1 : 1 + prompt_len] = torch.tensor(prompt[:prompt_len], dtype=torch.long, device=device)
+            src[i, 0] = self.bos_id
+
+            tgt[i, :prompt_len] = torch.tensor(prompt[:prompt_len], dtype=torch.long, device=device)
+            tgt[i, prompt_len] = self.eos_id
+
+        return src, tgt
+
+    def encode(self, text, eos=True, bos=False):
+        ids = self.tokenizer.encode(text, add_special_tokens=False)
+        if eos:
+            ids.append(self.eos_id)
+        if bos:
+            ids.insert(0, self.bos_id)
+        return ids
+
+    def decode(self, ids):
+        return self.tokenizer.decode(ids)
+
 
 
 if __name__ == '__main__':
     print("dataset test")
-    dataset = NamuwikiDataset('tokenizer.model')
+    dataset = NamuwikiDataset('NamuwikiTokenizer.model')
+
+    print(dataset.eos_id, dataset.eos)
+    print(dataset.bos_id, dataset.bos)
+    print(dataset.pad_id, dataset.pad)
+    print(dataset.unk_id, dataset.unk)
+
+
+    texts = ["안녕하세요. 반갑습니다용",
+             "ㅎㅇ"]
+    ids = dataset.collate_fn(texts)
+    print(ids)
+
+    # print(dataset)
