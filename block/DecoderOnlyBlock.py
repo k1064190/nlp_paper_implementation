@@ -2,12 +2,12 @@ import torch
 from torch import nn
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-from layer.MultiHeadAttentionLegacy import MultiHeadAttentionLegacy
-# import MultiHeadBigBirdAttention if gpu is available
-if device == 'cuda':
+from xformers import _is_triton_available
+# if package triton is installed, import MultiHeadBigBirdAttention from layer.MultiHeadBigBirdAttention
+if _is_triton_available():
     from layer.MultiHeadBigBirdAttention import MultiHeadBigBirdAttention
 from layer.PositionWiseFeedForward import PositionWiseFeedForward
+from layer.MultiHeadAttentionLegacy import MultiHeadAttentionLegacy
 from layer.ResidualConnection import ResidualConnection
 
 
@@ -20,9 +20,15 @@ class DecoderOnlyBlock(nn.Module):
                  ):
         super().__init__()
         # self.attn = MultiHeadAttentionLegacy(embed_dim=embed_dim, num_heads=num_heads) if use_legacy else nn.MultiheadAttention(embed_dim, num_heads)
-        self.attn = (MultiHeadBigBirdAttention
-                     (embed_dim=embed_dim, num_heads=num_heads, sequence_length=max_seq_len, dropout=0.1)) \
-            if not use_legacy else MultiHeadAttentionLegacy(embed_dim=embed_dim, num_heads=num_heads)
+        if not use_legacy:
+            if _is_triton_available():
+                self.attn = (MultiHeadBigBirdAttention
+                             (embed_dim=embed_dim, num_heads=num_heads, sequence_length=max_seq_len, dropout=0.1))
+            else:
+                print("Triton is not available, using legacy attention. Please install triton to use BigBird attention.")
+                self.attn = MultiHeadAttentionLegacy(embed_dim=embed_dim, num_heads=num_heads)
+        else:
+            self.attn = MultiHeadAttentionLegacy(embed_dim=embed_dim, num_heads=num_heads)
 
         self.ln1 = nn.LayerNorm(embed_dim)
         self.ln2 = nn.LayerNorm(embed_dim)
