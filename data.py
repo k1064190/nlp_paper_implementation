@@ -35,15 +35,15 @@ class NamuwikiDataset:
 
     def collate_fn(self, batch):
         batch = [x['text'] for x in batch]
-        # encode text to ids with max_seq_len
-        # src = [self.encode(text, bos=True, eos=True, max_seq_len=self.max_seq_len) for text in batch]
+        # encode text to ids with max length of the batch
+        src = [[self.bos_id] + self.tokenizer.encode(text, add_special_tokens=False) + [self.eos_id] for text in batch] # [bsz, each_text_len + 2]
+        max_len = max([len(ids) for ids in src])
+        max_len = min(max_len, self.max_seq_len + 1)
         # if id exceeds max_seq_len, truncate it and doesn't append eos token
-        src = [self.tokenizer.encode(text, max_length=self.max_seq_len, truncation=True, add_special_tokens=False) for text in batch]
-        src = [[self.bos_id] + ids for ids in src] # it is now at most max_seq_len + 1
-        src = [ids + [self.eos_id] + [self.pad_id] * (self.max_seq_len - len(ids)) if len(ids) < self.max_seq_len + 1
-               else ids
-               for ids in src] # it is now exactly max_seq_len + 1 (bos + ids + eos + pad... or bos + ids)
-        src = torch.tensor(src, dtype=torch.long, device=device)    # [bsz, max_seq_len+1]
+        src = [ids[:max_len] if len(ids) > max_len else ids + [self.pad_id] * (max_len - len(ids)) for ids in src] # [bsz, max_len+1]
+        # <s> + text + </s> + pad if text length is less than max_seq_len else <s> + text[:max_seq_len]
+        # when inference, text length is less than max_seq_len, because we set max_prompt_len less than max_seq_len
+        src = torch.tensor(src, dtype=torch.long, device=device)    # [bsz, max_len+1]
 
         return src
 
